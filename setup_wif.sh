@@ -5,10 +5,13 @@
 # ==============================================================================
 
 # Defina as variáveis abaixo antes de executar o script:
-export PROJECT_ID="seu_projeto"
+export PROJECT_ID="seu projeto"
 export REPO_OWNER="seu_usuario_ou_organizacao_github"
 export REPO_NAME="seu-repo"
 export REGION="us-central1"
+
+# Limpa qualquer barra extra (como "DaviFerreiraLima/") do REPO_OWNER
+REPO_OWNER=$(echo "${REPO_OWNER}" | sed 's/\/$//')
 
 echo "1. Ativando APIs necessárias no Google Cloud..."
 gcloud services enable \
@@ -26,18 +29,19 @@ gcloud artifacts repositories create cloud-run-demo-repo \
     --project="${PROJECT_ID}" || echo "Repositório já existe ou ocorreu um erro."
 
 echo "3. Criando Workload Identity Pool..."
-gcloud iam workload-identity-pools create "github-pool" \
+gcloud iam workload-identity-pools create "github-actions-pool" \
     --project="${PROJECT_ID}" \
     --location="global" \
     --display-name="GitHub Actions Pool" || echo "Pool já existe ou ocorreu um erro."
 
 echo "4. Criando Workload Identity Provider..."
-gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+gcloud iam workload-identity-pools providers create-oidc "github-actions-provider" \
     --project="${PROJECT_ID}" \
     --location="global" \
-    --workload-identity-pool="github-pool" \
+    --workload-identity-pool="github-actions-pool" \
     --display-name="GitHub Actions Provider" \
     --attribute-mapping="google.subject=assertion.subject,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+    --attribute-condition="assertion.repository == '${REPO_OWNER}/${REPO_NAME}'" \
     --issuer-uri="https://token.actions.githubusercontent.com" || echo "Provider já existe ou ocorreu um erro."
 
 echo "5. Criando Service Account para deploy..."
@@ -52,7 +56,7 @@ echo "6. Vinculando o repositório GitHub à Service Account..."
 gcloud iam service-accounts add-iam-policy-binding "github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
     --project="${PROJECT_ID}" \
     --role="roles/iam.workloadIdentityUser" \
-    --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/attribute.repository/${REPO_OWNER}/${REPO_NAME}"
+    --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/${REPO_OWNER}/${REPO_NAME}"
 
 echo "7. Concedendo permissões de IAM para a Service Account..."
 
@@ -73,7 +77,7 @@ gcloud iam service-accounts add-iam-policy-binding "github-actions-deployer@${PR
     --member="serviceAccount:github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
 
 # Exibe as informações finais que devem ser colocadas nas secrets do GitHub
-WIF_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+WIF_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider"
 SA_EMAIL="github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
 
 echo ""
@@ -94,5 +98,6 @@ echo "4. O serviço do Cloud Run foi configurado no workflow do GitHub Actions (
 echo "   - NÃO ser público (--no-allow-unauthenticated)"
 echo "   - Utilizar apenas 1 instância máxima (--max-instances=1)"
 echo "   - Utilizar recursos mínimos de CPU/Memória (--cpu=1 --memory=256Mi)"
+
 echo "=========================================================================="
 

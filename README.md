@@ -77,10 +77,45 @@ Criamos um script automatizador chamado `setup_wif.sh`. Siga os passos abaixo pa
 
 ### O que o script realiza de forma automática?
 * Ativa as APIs do IAM, Artifact Registry e Cloud Run no seu projeto.
-* Cria um repositório Docker privado no Artifact Registry (`cloud-run-demo-repo`).
-* Configura o Pool de Identidade (`github-pool`) e Provedor OIDC para o GitHub Actions.
-* Cria uma Service Account dedicada ao deploy (`github-actions-deployer`).
-* Associa as permissões IAM necessárias à Service Account para permitir compilação de imagem e administração do Cloud Run.
+### 1. Criar o Pool de Identidade
+```bash
+gcloud iam workload-identity-pools create "github-actions-pool" \
+    --project="${PROJECT_ID}" \
+    --location="global" \
+    --display-name="GitHub Actions Pool"
+```
+
+### 2. Criar o Provedor OIDC para o GitHub
+```bash
+gcloud iam workload-identity-pools providers create-oidc "github-actions-provider" \
+    --project="${PROJECT_ID}" \
+    --location="global" \
+    --workload-identity-pool="github-actions-pool" \
+    --display-name="GitHub Actions Provider" \
+    --attribute-mapping="google.subject=assertion.subject,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+    --attribute-condition="assertion.repository == '${REPO_OWNER}/${REPO_NAME}'" \
+    --issuer-uri="https://token.actions.githubusercontent.com"
+```
+
+---
+
+## 👤 Passo 5: Criar e Vincular a Service Account
+
+### 1. Criar a Service Account dedicada ao deploy
+```bash
+gcloud iam service-accounts create "github-actions-deployer" \
+    --project="${PROJECT_ID}" \
+    --display-name="SA para Deploy via GitHub Actions"
+```
+
+### 2. Dar permissão para o GitHub Actions se autenticar usando essa Service Account (Binding IAM)
+```bash
+gcloud iam service-accounts add-iam-policy-binding "github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
+    --project="${PROJECT_ID}" \
+    --role="roles/iam.workloadIdentityUser" \
+    --member="principalSet://iam.googleapis.com/projects/$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/${REPO_OWNER}/${REPO_NAME}"
+```
+
 
 ---
 
@@ -95,6 +130,7 @@ Após rodar o script anterior, ele exibirá no terminal os valores prontos para 
 ---
 
 ## 🛠️ Pipeline de CI/CD (GitHub Actions)
+
 
 A pipeline está declarada em `.github/workflows/deploy.yml` e dispara automaticamente a cada `git push` na branch `main`.
 
