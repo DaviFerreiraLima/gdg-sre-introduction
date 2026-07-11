@@ -4,12 +4,35 @@ import logging
 import threading
 from flask import Flask, jsonify
 
-# Configuração de logging padrão para o stdout/stderr
-logging.basicConfig(
-    level=logging.INFO,
-    format='[%(asctime)s] %(levelname)s: %(message)s'
-)
-logger = logging.getLogger(__name__)
+import json
+
+# Formatador de logs estruturados (JSON) compatível com o GCP Cloud Logging
+class GCPJsonFormatter(logging.Formatter):
+    def format(self, record):
+        # Mapeia níveis de log do Python para severidades do GCP
+        gcp_severity = record.levelname
+        if gcp_severity == "WARNING":
+            gcp_severity = "WARNING"
+        elif gcp_severity == "ERROR" or gcp_severity == "CRITICAL":
+            gcp_severity = "ERROR"
+            
+        log_entry = {
+            "severity": gcp_severity,
+            "message": record.getMessage(),
+            "component": record.name
+        }
+        return json.dumps(log_entry)
+
+# Configurar o handler de console para usar o formatador JSON
+handler = logging.StreamHandler()
+handler.setFormatter(GCPJsonFormatter())
+
+logger = logging.getLogger("app")
+logger.setLevel(logging.INFO)
+logger.addHandler(handler)
+# Evitar duplicação de logs caso o root logger tenha handlers
+logger.propagate = False
+
 
 app = Flask(__name__)
 
