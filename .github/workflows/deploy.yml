@@ -58,3 +58,6 @@ jobs:
           image: ${{ env.IMAGE_TAG }}
           # Define a variável GENERATE_ERRORS inicialmente como false (pode ser alterada via painel depois)
           env_vars: GENERATE_ERRORS=false
+          # Configura para não ser público, usar apenas 1 instância máxima e recursos reduzidos
+          flags: --no-allow-unauthenticated --max-instances=1 --cpu=1 --memory=256Mi
+
