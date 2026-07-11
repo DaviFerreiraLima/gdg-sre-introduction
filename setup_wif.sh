@@ -5,9 +5,9 @@
 # ==============================================================================
 
 # Defina as variáveis abaixo antes de executar o script:
-export PROJECT_ID="SEU_PROJECT_ID"
-export REPO_OWNER="SEU_USUARIO_OU_ORGANIZACAO_GITHUB"
-export REPO_NAME="gdg-sre-introduction"
+export PROJECT_ID="seu_projeto"
+export REPO_OWNER="seu_usuario_ou_organizacao_github"
+export REPO_NAME="seu-repo"
 export REGION="us-central1"
 
 echo "1. Ativando APIs necessárias no Google Cloud..."
