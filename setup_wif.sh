@@ -40,7 +40,8 @@ gcloud iam workload-identity-pools providers create-oidc "github-actions-provide
     --location="global" \
     --workload-identity-pool="github-actions-pool" \
     --display-name="GitHub Actions Provider" \
-    --attribute-mapping="google.subject=assertion.subject,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+    --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository" \
+
     --attribute-condition="assertion.repository == '${REPO_OWNER}/${REPO_NAME}'" \
     --issuer-uri="https://token.actions.githubusercontent.com" || echo "Provider já existe ou ocorreu um erro."
 
@@ -49,8 +50,14 @@ gcloud iam service-accounts create "github-actions-deployer" \
     --project="${PROJECT_ID}" \
     --display-name="SA para Deploy via GitHub Actions" || echo "Service account já existe ou ocorreu um erro."
 
-# Obtém o número do projeto automaticamente
-PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')
+echo "Buscando o número do projeto automaticamente..."
+# Captura o Project Number logo no início para usar em todo o script
+export PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')
+
+if [ -z "$PROJECT_NUMBER" ]; then
+    echo "Erro: Não foi possível obter o número do projeto. Verifique o PROJECT_ID."
+    exit 1
+fi
 
 echo "6. Vinculando o repositório GitHub à Service Account..."
 gcloud iam service-accounts add-iam-policy-binding "github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
@@ -70,11 +77,18 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="roles/run.admin"
 
-# Permissão para agir como Service Account User
+# Permissão para agir como Service Account User nela mesma
 gcloud iam service-accounts add-iam-policy-binding "github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com" \
     --project="${PROJECT_ID}" \
     --role="roles/iam.serviceAccountUser" \
     --member="serviceAccount:github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Permissão para agir como Service Account User no Default Compute Service Account (necessário para o Cloud Run)
+gcloud iam service-accounts add-iam-policy-binding "${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+    --project="${PROJECT_ID}" \
+    --role="roles/iam.serviceAccountUser" \
+    --member="serviceAccount:github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com"
+
 
 # Exibe as informações finais que devem ser colocadas nas secrets do GitHub
 WIF_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider"
